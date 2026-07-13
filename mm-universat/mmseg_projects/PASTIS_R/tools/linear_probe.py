@@ -26,12 +26,14 @@ import torch.nn as nn
 from einops import rearrange
 from torch.utils.data import DataLoader
 
-# Allow running from MMSegmentation repo root.
-PROJECT_ROOT = Path(__file__).resolve().parents[3]  # projects/universat/PASTIS_R
-sys.path.insert(0, str(PROJECT_ROOT))
-sys.path.insert(0, str(PROJECT_ROOT.parent))  # projects/universat
+# Allow running from MMSegmentation repo root or the project tree.
+# ``PROJECT_ROOT`` points to ``universat_run/`` (the OpenMMLab project root),
+# and ``UNIVERSAT_PROJECT_ROOT`` points to the UniverSat repository root.
+PROJECT_ROOT = Path(__file__).resolve().parents[3]  # universat_run/
+UNIVERSAT_PROJECT_ROOT = PROJECT_ROOT.parent  # universat/
+sys.path.insert(0, str(UNIVERSAT_PROJECT_ROOT))
 
-from universat.models.backbones.universat import UniverSatBackbone
+from universat_run.mmseg_projects.universat.models.backbones.universat import UniverSatBackbone
 from universat_run.mmseg_projects.PASTIS_R.datasets.pastisr_dataset import PASTISRDataset
 from universat_run.mmseg_projects.PASTIS_R.models.linear_probe_head import (
     BatchedLayerNormLinearProbes,
@@ -82,7 +84,16 @@ def build_backbone(cfg):
 
 @torch.no_grad()
 def extract_features(backbone, dataloader, device, patch_size=1):
-    """Extract backbone features and labels."""
+    """Extract backbone features and labels.
+
+    Args:
+        backbone: frozen UniverSat backbone returning ``[(B, C, H, W)]``.
+        dataloader: PASTIS-R dataloader.
+        device: torch device.
+        patch_size: side length (in label pixels) of the square region predicted
+            by each output token. For PASTIS-R 128x128 labels with 128x128
+            output tokens this is 1.
+    """
     logits_list, labels_list = [], []
 
     for batch in dataloader:
@@ -169,8 +180,8 @@ def train_probe(
 ):
     """Train linear probe heads and select best by validation mIoU."""
     in_features = train_logits.shape[-1]
-    out_dim = cfg.num_classes * cfg.patch_size * cfg.patch_size
-    patch_area = cfg.patch_size * cfg.patch_size
+    patch_area = cfg.patch_size_px * cfg.patch_size_px
+    out_dim = cfg.num_classes * patch_area
 
     specs = list(itertools.product(cfg.lr_list, cfg.weight_decay_list))
     heads = [LayerNormLinearClassifier(in_features, out_dim) for _ in specs]
@@ -299,11 +310,11 @@ def main():
     test_loader = make_loader("test", cfg.test_folds)
 
     print("Extracting train features...")
-    train_logits, train_labels = extract_features(backbone, train_loader, device, patch_size=cfg.patch_size)
+    train_logits, train_labels = extract_features(backbone, train_loader, device, patch_size=cfg.patch_size_px)
     print("Extracting val features...")
-    val_logits, val_labels = extract_features(backbone, val_loader, device, patch_size=cfg.patch_size)
+    val_logits, val_labels = extract_features(backbone, val_loader, device, patch_size=cfg.patch_size_px)
     print("Extracting test features...")
-    test_logits, test_labels = extract_features(backbone, test_loader, device, patch_size=cfg.patch_size)
+    test_logits, test_labels = extract_features(backbone, test_loader, device, patch_size=cfg.patch_size_px)
 
     print(f"Train features: {train_logits.shape}, labels: {train_labels.shape}")
 

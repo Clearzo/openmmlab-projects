@@ -9,7 +9,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-MMSEG_ROOT="$(cd "${PROJECT_DIR}/../../../.." && pwd)"
+UNIVERSAT_ROOT="$(cd "${PROJECT_DIR}/../../.." && pwd)"
 
 CONFIG="${1:-}"
 if [[ -z "${CONFIG}" ]]; then
@@ -29,14 +29,14 @@ echo "============================================================"
 echo "UniverSat PASTIS-R linear probe"
 echo "  config:   ${CONFIG}"
 echo "  project:  ${PROJECT_DIR}"
-echo "  mmseg:    ${MMSEG_ROOT}"
+echo "  repo:     ${UNIVERSAT_ROOT}"
 echo "  env:      ${ENV_NAME}"
 echo "============================================================"
 
 source "${CONDA_BASE}/etc/profile.d/conda.sh"
 conda activate "${ENV_NAME}"
 
-export PYTHONPATH="${PROJECT_DIR}:${PROJECT_DIR}/..:${PYTHONPATH:-}"
+export PYTHONPATH="${UNIVERSAT_ROOT}:${PYTHONPATH:-}"
 
-cd "${MMSEG_ROOT}"
+cd "${UNIVERSAT_ROOT}"
 python "${PROJECT_DIR}/tools/linear_probe.py" "${CONFIG}"

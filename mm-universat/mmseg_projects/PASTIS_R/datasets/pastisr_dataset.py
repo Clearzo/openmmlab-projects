@@ -120,7 +120,11 @@ class PASTISRDataset(Dataset):
         return norm
 
     def _apply_norm(self, output: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
-        """Apply stored normalization statistics."""
+        """Apply stored normalization statistics.
+
+        Mirrors ``src.data.utils.apply_norm``: per-channel mean/std are
+        broadcast over the spatial/temporal dimensions of each modality.
+        """
         if not self.normalize:
             return output
         for mod in self.modalities:
@@ -129,11 +133,15 @@ class PASTISRDataset(Dataset):
             mean = self.norm[mod]["mean"]
             std = self.norm[mod]["std"]
             tensor = output[mod]
-            while mean.ndim < tensor.ndim:
-                mean = mean.unsqueeze(-1)
-            while std.ndim < tensor.ndim:
-                std = std.unsqueeze(-1)
-            output[mod] = (tensor - mean) / (std + 1e-8)
+            if tensor.ndim == 3:  # (C, H, W)
+                mean = mean.view(-1, 1, 1)
+                std = std.view(-1, 1, 1)
+            elif tensor.ndim == 4:  # (T, C, H, W)
+                mean = mean.view(1, -1, 1, 1)
+                std = std.view(1, -1, 1, 1)
+            else:
+                continue
+            output[mod] = (tensor - mean) / std.clamp_min(1e-8)
         return output
 
     def __len__(self):
