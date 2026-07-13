@@ -26,16 +26,18 @@ import torch.nn as nn
 from einops import rearrange
 from torch.utils.data import DataLoader
 
-# Allow running from MMSegmentation repo root or the project tree.
-# ``PROJECT_ROOT`` points to ``universat_run/`` (the OpenMMLab project root),
-# and ``UNIVERSAT_PROJECT_ROOT`` points to the UniverSat repository root.
+# Allow running from the UniverSat repo tree.
+# This file lives at ``universat_run/mmseg_projects/PASTIS_R/tools/linear_probe.py``;
+# ``PROJECT_ROOT`` points to ``universat_run/`` and ``MMSEG_PROJECTS`` points to
+# ``universat_run/mmseg_projects/`` where ``universat/`` and ``PASTIS_R/`` are
+# placed side-by-side as MMSegmentation custom projects.
 PROJECT_ROOT = Path(__file__).resolve().parents[3]  # universat_run/
-UNIVERSAT_PROJECT_ROOT = PROJECT_ROOT.parent  # universat/
-sys.path.insert(0, str(UNIVERSAT_PROJECT_ROOT))
+MMSEG_PROJECTS = PROJECT_ROOT / "mmseg_projects"
+sys.path.insert(0, str(MMSEG_PROJECTS))
 
-from universat_run.mmseg_projects.universat.models.backbones.universat import UniverSatBackbone
-from universat_run.mmseg_projects.PASTIS_R.datasets.pastisr_dataset import PASTISRDataset
-from universat_run.mmseg_projects.PASTIS_R.models.linear_probe_head import (
+from universat.models.backbones.universat import UniverSatBackbone
+from PASTIS_R.datasets.pastisr_dataset import PASTISRDataset
+from PASTIS_R.models.linear_probe_head import (
     BatchedLayerNormLinearProbes,
     LayerNormLinearClassifier,
 )

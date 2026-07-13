@@ -1,43 +1,34 @@
 #!/usr/bin/env bash
-# Distributed training launcher for UniverSat-based segmentors (MMSeg).
+# Distributed training of a UniverSat-based segmentor.
+#
+# This project lives OUTSIDE the MMSegmentation repository as a custom project
+# under ``universat_run/mmseg_projects/universat/``. This script sets PYTHONPATH
+# so that MMSegmentation can load it without modifying the MMSegmentation source
+# tree.
 #
 # Usage:
-#   bash projects/universat/tools/dist_train.sh \
-#        projects/universat/configs/base_universat_seg.py \
+#   bash universat_run/mmseg_projects/universat/tools/dist_train.sh \
+#        universat_run/mmseg_projects/universat/configs/base_universat_seg.py \
 #        <num_gpus> \
-#        [optional arguments]
+#        [optional_checkpoint.pth]
 #
-# Examples:
-#   bash projects/universat/tools/dist_train.sh \
-#        projects/universat/configs/base_universat_seg.py 4
-#
-#   bash projects/universat/tools/dist_train.sh \
-#        projects/universat/configs/base_universat_seg.py 4 \
-#        --resume-from work_dirs/base_universat_seg/latest.pth
+# Environment:
+#   MMSEG_ROOT  (optional)  Path to the MMSegmentation repository/install root.
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-MMSEG_TOOLS_DIR="$(cd "${PROJECT_DIR}/../../../tools" && pwd)"
+PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"                          # .../universat/
+MMSEG_PROJECTS="$(cd "${PROJECT_DIR}/.." && pwd)"                      # .../mmseg_projects/
+UNIVERSAT_ROOT="$(cd "${MMSEG_PROJECTS}/../.." && pwd)"                # UniverSat repo root
 
 CONFIG="${1:-}"
-GPUS="${2:-}"
-shift 2 || true
+GPUS="${2:-1}"
+CKPT="${3:-}"
 
-if [[ -z "${CONFIG}" || -z "${GPUS}" ]]; then
-    echo "Error: both config file and number of GPUs are required."
-    echo "Usage: $0 <config.py> <num_gpus> [extra args]"
-    exit 1
-fi
-
-if ! [[ "${GPUS}" =~ ^[0-9]+$ ]]; then
-    echo "Error: number of GPUs must be an integer, got: ${GPUS}"
-    exit 1
-fi
-
-if [[ ! -f "${MMSEG_TOOLS_DIR}/train.py" ]]; then
-    echo "Error: cannot find mmsegmentation tools/train.py at ${MMSEG_TOOLS_DIR}"
+if [[ -z "${CONFIG}" ]]; then
+    echo "Error: config file is required."
+    echo "Usage: $0 <config.py> <num_gpus> [checkpoint]"
     exit 1
 fi
 
@@ -48,54 +39,54 @@ else
     CONDA_BASE="$(conda info --base)"
 fi
 
-NNODES="${NNODES:-1}"
-NODE_RANK="${NODE_RANK:-0}"
-PORT="${PORT:-29500}"
-MASTER_ADDR="${MASTER_ADDR:-127.0.0.1}"
+source "${CONDA_BASE}/etc/profile.d/conda.sh"
+conda activate "${ENV_NAME}"
 
-if conda run -n "${ENV_NAME}" which torchrun &>/dev/null; then
-    LAUNCHER="torchrun"
-else
-    LAUNCHER="torch.distributed.launch"
+# Locate MMSegmentation root.
+MMSEG_ROOT="${MMSEG_ROOT:-}"
+if [[ -z "${MMSEG_ROOT}" ]]; then
+    MMSEG_ROOT="$(python -c "import mmseg, os; print(os.path.dirname(os.path.dirname(mmseg.__file__)))" 2>/dev/null || true)"
+fi
+if [[ -z "${MMSEG_ROOT}" || ! -f "${MMSEG_ROOT}/tools/train.py" ]]; then
+    echo "Error: cannot find MMSegmentation tools/train.py."
+    echo "Please set MMSEG_ROOT to your MMSegmentation repository or installation root, e.g.:"
+    echo "  export MMSEG_ROOT=/path/to/mmsegmentation"
+    exit 1
+fi
+
+PORT="${PORT:-29500}"
+
+EXTRA_ARGS=()
+if [[ -n "${CKPT}" ]]; then
+    EXTRA_ARGS+=("--resume-from" "${CKPT}")
 fi
 
 echo "============================================================"
 echo "UniverSat distributed segmentation training (MMSeg)"
-echo "  config:      ${CONFIG}"
-echo "  gpus/node:   ${GPUS}"
-echo "  nodes:       ${NNODES}"
-echo "  node rank:   ${NODE_RANK}"
-echo "  master:      ${MASTER_ADDR}:${PORT}"
-echo "  launcher:    ${LAUNCHER}"
-echo "  project:     ${PROJECT_DIR}"
-echo "  env:         ${ENV_NAME}"
+echo "  config:         ${CONFIG}"
+echo "  gpus:           ${GPUS}"
+echo "  project:        ${PROJECT_DIR}"
+echo "  mmseg_projects: ${MMSEG_PROJECTS}"
+echo "  mmseg_root:     ${MMSEG_ROOT}"
+echo "  env:            ${ENV_NAME}"
 echo "============================================================"
 
-source "${CONDA_BASE}/etc/profile.d/conda.sh"
-conda activate "${ENV_NAME}"
+export PYTHONPATH="${MMSEG_PROJECTS}:${PYTHONPATH:-}"
 
-export PYTHONPATH="${PROJECT_DIR}:${PYTHONPATH:-}"
-
-if [[ "${LAUNCHER}" == "torchrun" ]]; then
+if conda run -n "${ENV_NAME}" which torchrun &>/dev/null; then
     torchrun \
-        --nnodes="${NNODES}" \
-        --node_rank="${NODE_RANK}" \
-        --master_addr="${MASTER_ADDR}" \
-        --master_port="${PORT}" \
         --nproc_per_node="${GPUS}" \
-        "${MMSEG_TOOLS_DIR}/train.py" \
+        --master_port="${PORT}" \
+        "${MMSEG_ROOT}/tools/train.py" \
         "${CONFIG}" \
         --launcher pytorch \
-        "$@"
+        "${EXTRA_ARGS[@]}"
 else
     python -m torch.distributed.launch \
-        --nnodes="${NNODES}" \
-        --node_rank="${NODE_RANK}" \
-        --master_addr="${MASTER_ADDR}" \
-        --master_port="${PORT}" \
         --nproc_per_node="${GPUS}" \
-        "${MMSEG_TOOLS_DIR}/train.py" \
+        --master_port="${PORT}" \
+        "${MMSEG_ROOT}/tools/train.py" \
         "${CONFIG}" \
         --launcher pytorch \
-        "$@"
+        "${EXTRA_ARGS[@]}"
 fi

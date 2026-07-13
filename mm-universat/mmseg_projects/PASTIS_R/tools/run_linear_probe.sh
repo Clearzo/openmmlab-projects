@@ -1,15 +1,19 @@
 #!/usr/bin/env bash
 # Run UniverSat linear-probe semantic segmentation on PASTIS-R.
 #
+# This project lives OUTSIDE the MMSegmentation repository as a custom project
+# pair (``universat/`` + ``PASTIS_R/``) under ``universat_run/mmseg_projects/``.
+#
 # Usage:
-#   bash projects/universat/PASTIS_R/tools/run_linear_probe.sh \
-#        projects/universat/PASTIS_R/configs/linear_probe_universat_pastisr.py
+#   bash universat_run/mmseg_projects/PASTIS_R/tools/run_linear_probe.sh \
+#        universat_run/mmseg_projects/PASTIS_R/configs/linear_probe_universat_pastisr.py
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-UNIVERSAT_ROOT="$(cd "${PROJECT_DIR}/../../.." && pwd)"
+PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"                          # .../PASTIS_R/
+MMSEG_PROJECTS="$(cd "${PROJECT_DIR}/.." && pwd)"                      # .../mmseg_projects/
+UNIVERSAT_ROOT="$(cd "${MMSEG_PROJECTS}/../.." && pwd)"               # UniverSat repo root
 
 CONFIG="${1:-}"
 if [[ -z "${CONFIG}" ]]; then
@@ -27,16 +31,17 @@ fi
 
 echo "============================================================"
 echo "UniverSat PASTIS-R linear probe"
-echo "  config:   ${CONFIG}"
-echo "  project:  ${PROJECT_DIR}"
-echo "  repo:     ${UNIVERSAT_ROOT}"
-echo "  env:      ${ENV_NAME}"
+echo "  config:       ${CONFIG}"
+echo "  project:      ${PROJECT_DIR}"
+echo "  mmseg_projects: ${MMSEG_PROJECTS}"
+echo "  repo:         ${UNIVERSAT_ROOT}"
+echo "  env:          ${ENV_NAME}"
 echo "============================================================"
 
 source "${CONDA_BASE}/etc/profile.d/conda.sh"
 conda activate "${ENV_NAME}"
 
-export PYTHONPATH="${UNIVERSAT_ROOT}:${PYTHONPATH:-}"
+export PYTHONPATH="${MMSEG_PROJECTS}:${PYTHONPATH:-}"
 
 cd "${UNIVERSAT_ROOT}"
 python "${PROJECT_DIR}/tools/linear_probe.py" "${CONFIG}"

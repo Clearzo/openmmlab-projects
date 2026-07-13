@@ -2,24 +2,30 @@
 已按你的要求创建好了迁移后的 OpenMMLab 项目结构，位置在：
 
 ```bash
-projects/
-├── configs/universat/base_universat.py   # 训练配置
-└── universat/                            # 项目代码包
-    ├── README.md
-    ├── __init__.py
-    ├── models/
-    │   ├── __init__.py
-    │   └── backbones/
-    │       ├── __init__.py
-    │       ├── universat.py              # MMDet backbone wrapper
-    │       └── universat_modules/        # 原 UniverSat 骨干代码
-    ├── datasets/
-    │   ├── __init__.py
-    │   ├── universat_dataset.py          # 多模态数据集
-    │   └── pipelines/
-    │       └── loading.py                # 多模态加载 transform
-    └── tools/
-        └── train.py                      # 训练入口
+universat/                                # UniverSat 源码仓库根
+└── universat_run/                        # OpenMMLab 自定义项目集合
+    └── mmdet_projects/                   # 对应 mmdetection/projects/
+        └── universat/                    # 项目代码包
+            ├── README.md
+            ├── __init__.py
+            ├── configs/
+            │   └── base_universat.py     # 训练配置
+            ├── models/
+            │   ├── __init__.py
+            │   └── backbones/
+            │       ├── __init__.py
+            │       ├── universat.py      # MMDet backbone wrapper
+            │       └── universat_modules/ # 原 UniverSat 骨干代码
+            ├── datasets/
+            │   ├── __init__.py
+            │   ├── universat_dataset.py  # 多模态数据集
+            │   └── pipelines/
+            │       └── loading.py        # 多模态加载 transform
+            └── tools/
+                ├── train.sh              # 单卡训练
+                ├── test.sh               # 推理/测试
+                ├── dist_train.sh         # 多卡分布式训练
+                └── train.py              # Python 训练入口
 ```
 
 我已验证 backbone 可以正常运行（当前环境下用 `output_grid=9`、输入 `36×36` 测试通过，更大尺寸因本机内存不足被系统 kill，属于环境问题不是代码问题）。
@@ -29,42 +35,46 @@ projects/
 ## 一、迁移后的完整代码结构
 
 ```bash
-projects/
-├── configs/
-│   └── universat/
-│       └── base_universat.py          # 示例：UniverSat + Faster R-CNN 配置
-└── universat/
-    ├── README.md                       # 使用说明
-    ├── __init__.py                     # 自动注册 models/datasets
-    ├── models/
-    │   ├── __init__.py                 # from .backbones import *
-    │   └── backbones/
-    │       ├── __init__.py             # 导出 UniverSatBackbone
-    │       ├── universat.py            # ★ MMDet wrapper（新增）
-    │       └── universat_modules/      # ★ 原骨干代码（最小改动迁移）
-    │           ├── __init__.py
-    │           ├── UniverSat.py
-    │           ├── UniversalPatchEncoder.py
-    │           ├── modality_registry.py
-    │           ├── masking/            # SSL mask 模块（推理时传 None）
-    │           │   ├── __init__.py
-    │           │   ├── mask.py
-    │           │   ├── masker.py
-    │           │   └── utils.py
-    │           └── utils/
-    │               ├── __init__.py
-    │               ├── flexiVit.py
-    │               ├── patch_embeddings.py
-    │               ├── pos_embed.py
-    │               ├── utils.py
-    │               └── utils_ViT.py
-    ├── datasets/
-    │   ├── __init__.py                 # 导出 UniverSatDataset, LoadMultimodalFromFile
-    │   ├── universat_dataset.py        # CustomDataset 多模态数据集模板
-    │   └── pipelines/
-    │       └── loading.py              # LoadMultimodalFromFile transform
-    └── tools/
-        └── train.py                    # 自动加项目路径并调用 tools/train.py
+universat/                                # UniverSat 源码仓库根
+└── universat_run/
+    └── mmdet_projects/
+        └── universat/
+            ├── README.md                       # 使用说明
+            ├── __init__.py                     # 自动注册 models/datasets
+            ├── configs/
+            │   └── base_universat.py           # 示例：UniverSat + Faster R-CNN 配置
+            ├── models/
+            │   ├── __init__.py                 # from .backbones import *
+            │   └── backbones/
+            │       ├── __init__.py             # 导出 UniverSatBackbone
+            │       ├── universat.py            # ★ MMDet wrapper（新增）
+            │       └── universat_modules/      # ★ 原骨干代码（最小改动迁移）
+            │           ├── __init__.py
+            │           ├── UniverSat.py
+            │           ├── UniversalPatchEncoder.py
+            │           ├── modality_registry.py
+            │           ├── masking/            # SSL mask 模块（推理时传 None）
+            │           │   ├── __init__.py
+            │           │   ├── mask.py
+            │           │   ├── masker.py
+            │           │   └── utils.py
+            │           └── utils/
+            │               ├── __init__.py
+            │               ├── flexiVit.py
+            │               ├── patch_embeddings.py
+            │               ├── pos_embed.py
+            │               ├── utils.py
+            │               └── utils_ViT.py
+            ├── datasets/
+            │   ├── __init__.py                 # 导出 UniverSatDataset, LoadMultimodalFromFile
+            │   ├── universat_dataset.py        # CustomDataset 多模态数据集模板
+            │   └── pipelines/
+            │       └── loading.py              # LoadMultimodalFromFile transform
+            └── tools/
+                ├── train.sh                    # 单卡训练
+                ├── test.sh                     # 推理/测试
+                ├── dist_train.sh               # 多卡分布式训练
+                └── train.py                    # 自动加项目路径并调用 tools/train.py
 ```
 
 ---
@@ -81,7 +91,7 @@ projects/
 | 无                                                       | `backbones/universat.py`                     | 新增 MMDet wrapper        |
 | 无                                                       | `datasets/universat_dataset.py`              | 新增多模态数据集          |
 | 无                                                       | `datasets/pipelines/loading.py`              | 新增多模态加载            |
-| 无                                                       | `configs/universat/base_universat.py`        | 新增训练配置              |
+| 无                                                       | `universat/configs/base_universat.py`        | 新增训练配置              |
 
 ---
 
@@ -124,40 +134,45 @@ except ImportError:
 
 ## 四、如何集成到 mmdetection
 
-### 方式一：复制到 mmdetection/projects/ 下
+### 方式一：放在 UniverSat 仓库外部运行（推荐）
+
+项目默认位于 `universat_run/mmdet_projects/universat/`，与 `mmseg_projects/` 并列。脚本会自动把 `universat_run/mmdet_projects/` 加入 `PYTHONPATH`，并通过 `MMDET_ROOT` 定位 MMDetection。
 
 ```bash
-cp -r projects/universat /path/to/mmdetection/projects/
-cp -r projects/configs/universat /path/to/mmdetection/projects/configs/
+cd /path/to/universat
+bash universat_run/mmdet_projects/universat/tools/train.sh \
+    universat_run/mmdet_projects/universat/configs/base_universat.py
 ```
 
-### 方式二：通过 PYTHONPATH 引入
-
-如果不想复制，训练时把 `projects/` 加入 `PYTHONPATH`：
+如果 MMDetection 不在默认位置：
 
 ```bash
-PYTHONPATH=/path/to/this/projects:$PYTHONPATH \
-python mmdetection/tools/train.py /path/to/this/projects/configs/universat/base_universat.py
+export MMDET_ROOT=/path/to/mmdetection
 ```
 
-### 训练命令
+### 方式二：复制到 mmdetection/projects/ 下
 
 ```bash
+cp -r universat_run/mmdet_projects/universat /path/to/mmdetection/projects/
 cd /path/to/mmdetection
 python tools/train.py projects/universat/configs/base_universat.py
 ```
 
-或使用项目自带入口：
+### 方式三：通过 PYTHONPATH 引入
+
+如果不想复制，训练时把 `universat_run/mmdet_projects/` 加入 `PYTHONPATH`：
 
 ```bash
-python projects/universat/tools/train.py projects/universat/configs/base_universat.py
+PYTHONPATH=/path/to/universat/universat_run/mmdet_projects:$PYTHONPATH \
+python /path/to/mmdetection/tools/train.py \
+    /path/to/universat/universat_run/mmdet_projects/universat/configs/base_universat.py
 ```
 
 ---
 
 ## 五、配置中如何使用
 
-`configs/universat/base_universat.py` 里已经给出示例：
+`universat/configs/base_universat.py` 里已经给出示例：
 
 ```python
 model = dict(

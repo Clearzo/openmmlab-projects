@@ -1,31 +1,52 @@
-# UniverSat PASTIS-R 下游任务迁移（MMSegmentation 风格）
+# UniverSat PASTIS-R 下游任务迁移（MMSegmentation 自定义项目）
 
-本目录将 UniverSat 源码中 PASTIS-R 语义分割下游任务迁移为独立的 MMSegmentation project，包含：
+本目录将 UniverSat 源码中 PASTIS-R 语义分割下游任务迁移为独立的 MMSegmentation 自定义 project，与 `../universat/` 并列放置在 `universat_run/mmseg_projects/` 下。
+
+这种布局的好处是：
+- **不破坏 MMSegmentation 源码**：所有自定义代码都在 UniverSat 仓库内部。
+- **便于修改调试**：可以直接在本仓库修改 backbone、head、dataset，MMSegmentation 通过 `PYTHONPATH` 加载即可。
+
+包含：
 
 - **Linear Probe（线性探测）**：复现 `UniverSat/src/LP_eval.py` 的 (lr, weight_decay) 超参扫掠流程。
-- **Fine-tuning（端到端微调）**：复现 `UniverSat/src/train.py` 的语义分割微调流程（通过 `../universat/` 提供的 MMSeg 配置运行）。
+- **Fine-tuning（端到端微调）**：复现 `UniverSat/src/train.py` 的语义分割微调流程，通过 MMSegmentation 的 `tools/train.py` 运行。
 
 ## 目录结构
 
 ```text
-PASTIS_R/
-├── configs/
-│   ├── linear_probe_universat_pastisr.py       # linear probe 专用 Python 配置
-│   ├── linear_probe_universat_pastisr_local.py # 本地化路径示例
-│   └── ft_universat_pastisr.py                 # MMSeg 风格端到端微调配置
-├── datasets/
-│   └── pastisr_dataset.py                      # 原始 Pastis.py 的独立 Dataset 封装
-├── models/
-│   └── linear_probe_head.py                    # LayerNorm + Linear 探测头
-├── tools/
-│   ├── linear_probe.py                         # linear probe 主程序
-│   ├── run_linear_probe.sh                     # 单卡 linear probe 启动脚本
-│   ├── dist_run_linear_probe.sh                # 多卡 linear probe 启动脚本
-│   ├── train.sh                                # MMSeg 单卡训练启动脚本
-│   ├── dist_train.sh                           # MMSeg 多卡训练启动脚本
-│   └── test.sh                                 # MMSeg 测试启动脚本
-└── README.md                                   # 本文件
+universat/                                # UniverSat 源码仓库根
+└── universat_run/                        # OpenMMLab 自定义项目集合
+    └── mmseg_projects/                   # 相当于 mmsegmentation/projects/
+        ├── universat/                    # 通用组件 project
+        │   ├── models/
+        │   │   ├── backbones/universat.py
+        │   │   └── decode_heads/
+        │   ├── datasets/
+        │   │   ├── pastisr_dataset.py       # MMSeg 版 PASTIS-R dataset
+        │   │   └── pipelines/
+        │   └── configs/
+        └── PASTIS_R/                     # PASTIS-R 下游任务 project（本目录）
+            ├── configs/
+            │   ├── linear_probe_universat_pastisr.py
+            │   ├── linear_probe_universat_pastisr_local.py
+            │   └── ft_universat_pastisr.py
+            ├── datasets/
+            │   └── pastisr_dataset.py       # 独立版 Dataset（用于 linear_probe.py）
+            ├── models/
+            │   └── linear_probe_head.py
+            └── tools/
+                ├── linear_probe.py
+                ├── run_linear_probe.sh
+                ├── dist_run_linear_probe.sh
+                ├── train.sh
+                ├── dist_train.sh
+                └── test.sh
 ```
+
+## `PASTIS_R/` 与 `universat/` 的关系
+
+- `universat/`：通用组件库，提供 `UniverSatBackbone`、`UniverSatSegHead`、`UniverSatLinearProbeHead`、MMSeg 版 `PASTISRDataset` 及 pipelines。
+- `PASTIS_R/`：PASTIS-R 下游任务专用 project，通过 Python import / MMSegmentation registry 引用 `universat/` 的组件。
 
 ## 依赖
 
@@ -37,6 +58,14 @@ python -m pip install geopandas rasterio einops
 ```
 
 `../universat/` 目录下的 backbone 代码已经做了 MMSeg 缺失时的 graceful fallback，因此即使没有安装 `mmcv/mmseg` 也能运行 linear probe。
+
+Fine-tuning 需要安装 MMSegmentation（可与本仓库独立安装）：
+
+```bash
+pip install -U openmim
+mim install mmcv-full
+mim install mmsegmentation
+```
 
 ## 数据与权重准备
 
@@ -59,6 +88,8 @@ data/PASTIS-R/
 
 ## Linear Probe
 
+Linear probe 不依赖 MMSegmentation，直接运行即可。
+
 ### 单卡运行
 
 ```bash
@@ -71,7 +102,7 @@ bash universat_run/mmseg_projects/PASTIS_R/tools/run_linear_probe.sh \
 
 ```bash
 cd /path/to/universat
-PYTHONPATH="/path/to/universat:${PYTHONPATH}" \
+PYTHONPATH="/path/to/universat/universat_run/mmseg_projects:${PYTHONPATH}" \
 python universat_run/mmseg_projects/PASTIS_R/tools/linear_probe.py \
     universat_run/mmseg_projects/PASTIS_R/configs/linear_probe_universat_pastisr.py
 ```
@@ -96,6 +127,7 @@ bash universat_run/mmseg_projects/PASTIS_R/tools/dist_run_linear_probe.sh \
 | `checkpoint` | 预训练权重路径 |
 | `embed_dim=768`, `num_heads=12` | Base 模型配置 |
 | `patch_size=40`, `output_grid=128` | PASTIS-R 1280m tile → 128×128 tokens |
+| `patch_size_px` | 每个输出 token 预测的标注像素边长，PASTIS-R 128×128 label 对应 `1` |
 | `lr_list` / `weight_decay_list` | linear probe 超参扫掠网格 |
 | `batch_size` / `max_epochs` | 探测头训练参数 |
 
@@ -119,41 +151,45 @@ bash universat_run/mmseg_projects/PASTIS_R/tools/dist_run_linear_probe.sh \
 
 ### 使用 MMSegmentation 风格配置
 
-`configs/ft_universat_pastisr.py` 使用 `../universat/` 提供的 backbone 与分割头，端到端微调整个模型。需将本项目复制到标准 MMSegmentation 仓库：
+`configs/ft_universat_pastisr.py` 使用 `../universat/` 提供的 backbone 与分割头，端到端微调整个模型。由于 projects 放在 MMSegmentation 外部，脚本会自动把 `universat_run/mmseg_projects/` 加入 `PYTHONPATH`。
+
+#### 指定 MMSegmentation 路径
+
+脚本会自动通过已安装的 `mmseg` 包定位 MMSegmentation 根目录。如果自动检测失败，请手动设置：
 
 ```bash
-cp -r universat_run/mmseg_projects/* /path/to/mmsegmentation/projects/
-cd /path/to/mmsegmentation
+export MMSEG_ROOT=/path/to/mmsegmentation
 ```
 
-单卡训练：
+#### 单卡训练
 
 ```bash
-bash projects/universat/PASTIS_R/tools/train.sh \
-    projects/universat/PASTIS_R/configs/ft_universat_pastisr.py
+cd /path/to/universat
+bash universat_run/mmseg_projects/PASTIS_R/tools/train.sh \
+    universat_run/mmseg_projects/PASTIS_R/configs/ft_universat_pastisr.py
 ```
 
-多卡分布式训练（2 卡示例）：
+#### 多卡分布式训练（2 卡示例）
 
 ```bash
-bash projects/universat/PASTIS_R/tools/dist_train.sh \
-    projects/universat/PASTIS_R/configs/ft_universat_pastisr.py 2
+bash universat_run/mmseg_projects/PASTIS_R/tools/dist_train.sh \
+    universat_run/mmseg_projects/PASTIS_R/configs/ft_universat_pastisr.py 2
 ```
 
-从 checkpoint 续训：
+#### 从 checkpoint 续训
 
 ```bash
-bash projects/universat/PASTIS_R/tools/train.sh \
-    projects/universat/PASTIS_R/configs/ft_universat_pastisr.py \
-    work_dirs/ft_universat_pastisr/latest.pth
+bash universat_run/mmseg_projects/PASTIS_R/tools/train.sh \
+    universat_run/mmseg_projects/PASTIS_R/configs/ft_universat_pastisr.py \
+    /path/to/checkpoint/last.pth
 ```
 
-测试：
+#### 测试
 
 ```bash
-bash projects/universat/PASTIS_R/tools/test.sh \
-    projects/universat/PASTIS_R/configs/ft_universat_pastisr.py \
-    work_dirs/ft_universat_pastisr/latest.pth \
+bash universat_run/mmseg_projects/PASTIS_R/tools/test.sh \
+    universat_run/mmseg_projects/PASTIS_R/configs/ft_universat_pastisr.py \
+    /path/to/checkpoint/latest.pth \
     --eval mIoU --show-dir vis/pastisr_ft/
 ```
 
